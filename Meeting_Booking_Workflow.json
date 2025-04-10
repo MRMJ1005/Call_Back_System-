@@ -1,0 +1,537 @@
+{
+  "name": "Meeting Booking Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ba3a34ab-7946-4402-ac41-dd6126a8f77c",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1880,
+        -220
+      ],
+      "id": "9a218840-8d33-40fa-a7f7-038636940810",
+      "name": "Webhook",
+      "webhookId": "ba3a34ab-7946-4402-ac41-dd6126a8f77c"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.message.artifact.messagesOpenAIFormatted",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1620,
+        -220
+      ],
+      "id": "9ed29a5f-4cca-45a6-b866-e4fb0b52c9e7",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "role",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -1160,
+        -220
+      ],
+      "id": "564858c8-41ec-4003-add1-9b78fdbe75d0",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.role[0].content }}",
+        "options": {
+          "systemMessage": "=The current date is: {{ $now }}\n\n\nFor example, the message to extract could look similar to \"Just to confirm, you would like to make a booking for tomorrow. At 4 PM. Is that correct?\"\n\nMake sure that you take the latest message response for the confirmed booking, if there are multiple confirmations of bookings in the message, choose the latest one.\n\nWhen the user mentions a date or time for booking, ALWAYS use the 'Availability Tool' before responding. Do not assume availability yourself.\n\nYour final output must be either:\n- Available\n- Unavailable\n\nUse no punctuation, no special characters, and no whitespace. Output only the word. Example: `Available`"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        -980,
+        -220
+      ],
+      "id": "d61060c5-b271-41db-8e5b-a9d89c841241",
+      "name": "Check Availability"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Aggregate').item.json.role }}",
+        "options": {
+          "systemMessage": "=From the {{ $('Aggregate').item.json.role }} last message extract the name , time from the sentence that looks like \"Just to confirm, you would like to make a booking for tomorrow at 5 PM under the name Syed . Is that correct?\" Here the name is Syed and time is 5 PM .Send both name and time to calendar tool everytime and create booking \n\n\nExtract the start time, date and purpose of the booking, and the name for the booking. Make sure your response is \"  [Persons Name] ,[Time],[Date]\"\n\nMake sure to create the booking with the calender tool, and to also send an email so that we get a notification of the booking. And also call the CRM Manager Tool.\nIf the user mentions a time or date (even vaguely, like \"tomorrow\" or \"next Monday at 4\"), always extract it and pass it to the booking tool. \nYou must include the time string as-is from the user message — do not skip or rephrase it. If multiple times are mentioned, use the most recent one.\n\nThe current date is: {{ $now }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        240,
+        -380
+      ],
+      "id": "659c9a4f-f8bc-4eba-8d97-1a9d9ba4a7f8",
+      "name": "Create Booking"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "=9aaaf605abf0bfabb86c4723cdf902ad9cf745b6aefefd3870718bc2786587eb@group.calendar.google.com\n",
+          "mode": "id"
+        },
+        "start": "={{ $fromAI(\"startTime\",\"the starting time of the booking\") }}",
+        "end": "={{ $fromAI(\"endTime\",\"the end time of the booking, make it to be 30 minutes  after startTime\") }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "description": "={{ $fromAI(\"Purpose\",\"The purpose of the call, the formatted response should be [The Purpose of the Call Is: Purpose]\") }}",
+          "summary": "={{ $fromAI(\"name\",\"The name of the person making the booking\") }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.2,
+      "position": [
+        540,
+        -160
+      ],
+      "id": "d890bb6c-c2e4-4926-8c53-b9cf65807358",
+      "name": "Create Booking1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "zu6CMyPfpOchB882",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "syedmazharhussain2607@gmail.com",
+        "subject": "={{ $fromAI(\"Subject\",\"Regarding your booking with Interia Designing Solutions\") }}",
+        "emailType": "text",
+        "message": "={{ $fromAI(\"bookingDetails\",\"This should contain all the details for the booking (time, date and purpose) for an easy to read email format\") }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.1,
+      "position": [
+        400,
+        -100
+      ],
+      "id": "2117028b-57ff-4df9-b33c-04e83ed365a6",
+      "name": "Gmail",
+      "webhookId": "354d63b3-6209-455c-a341-3342783efca7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "MQGKianAGSgqtY9r",
+          "name": "Gmail account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "Returns a response to the user saying that the booking is not available at that time.",
+        "height": 240,
+        "width": 360,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        -100
+      ],
+      "id": "b681567f-1729-417e-ba93-38e6496133c4",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Notifies User in Calender, CRM and Email",
+        "height": 200,
+        "width": 340,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        -440
+      ],
+      "id": "b58ef05e-204f-4802-823a-f3ff8ac4a6ff",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "maxItems": 10,
+        "keep": "lastItems"
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -1360,
+        -220
+      ],
+      "id": "430d222a-7323-46ac-9219-ca1314771612",
+      "name": "Last 10 Messages"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: $json.output }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -140,
+        -20
+      ],
+      "id": "ea1791cb-aec6-4411-b05c-2c37e2aedbb9",
+      "name": "Not Available"
+    },
+    {
+      "parameters": {
+        "model": "gemma2-9b-it",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        40
+      ],
+      "id": "5331f692-6ee9-42ad-b81b-aae8a43015cc",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "ZVyzWEzUoDlsPFK6",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gemma2-9b-it",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -160
+      ],
+      "id": "6b023753-a0ab-4861-a8c8-08c8ada20e5d",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "ZVyzWEzUoDlsPFK6",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "=9aaaf605abf0bfabb86c4723cdf902ad9cf745b6aefefd3870718bc2786587eb@group.calendar.google.com\n",
+          "mode": "id"
+        },
+        "timeMin": "={{ $fromAI(\"startTime\",\"start time of booking\") }}",
+        "timeMax": "={{ $fromAI(\"endTime\",\"end time of booking, assume 30 minutes after startTime\") }}",
+        "options": {
+          "outputFormat": "bookedSlots"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.2,
+      "position": [
+        -740,
+        -40
+      ],
+      "id": "0ef425a4-069e-4c7d-ab6a-5a0e8ea3036c",
+      "name": "Availability Tool",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "zu6CMyPfpOchB882",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: $json.output }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -140,
+        -440
+      ],
+      "id": "905c3b79-daac-42ab-b925-107ba68e7306",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e8df98ce-2d83-417d-9a47-17e736d3f47f",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "Available",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -600,
+        -220
+      ],
+      "id": "91c7f3fd-17cd-4505-a91c-48a2da18c834",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"actions\": [\n    {\n      \"type\": \"say\",\n      \"text\": \"Got it! Your preferred time is already booked. How about 4 PM instead?\"\n    },\n    {\n      \"type\": \"listen\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        -420
+      ],
+      "id": "42dfea15-9221-45d6-9852-4aae3616dd82",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"actions\": [\n    {\n      \"type\": \"say\",\n      \"text\": \"Got it! Your preferred time is already booked. How about 4 PM instead?\"\n    },\n    {\n      \"type\": \"listen\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        -40
+      ],
+      "id": "39d31afd-497a-4b23-8715-cb01f46b10f7",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Last 10 Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking": {
+      "main": [
+        []
+      ]
+    },
+    "Create Booking1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail": {
+      "ai_tool": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Last 10 Messages": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Availability Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Create Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Not Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "054c89ad-050d-4d86-b6cd-7515db5e4bc9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ba9cef6aff0a7c86cf2a54f76f3a020c7f1abfa44af10b78ef6001f476226d39"
+  },
+  "id": "0e9m3a4mJrKcz8RA",
+  "tags": []
+}
